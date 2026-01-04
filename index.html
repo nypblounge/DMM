@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DMM Step Planner (All-in-one)</title>
+  <title>DMM Step Planner (GitHub Pages Auto Pack)</title>
   <style>
     :root{
       --panel:#161a22;
@@ -311,8 +311,10 @@
 
 <header>
   <div class="grow">
-    <h1>DMM Step Planner (All-in-one)</h1>
-    <div class="sub">Images in IndexedDB • Export Pack (.zip) • Export Standalone HTML • Drag sections with ⇅</div>
+    <h1>DMM Step Planner</h1>
+    <div class="sub">
+      Auto-loads pack from <code class="pill">/data/dmm_plan.zip</code> • Bump version to force updates
+    </div>
   </div>
 
   <button class="btn primary" id="addSectionBtn">➕ Add section</button>
@@ -342,12 +344,11 @@
       <input id="planTitle" type="text" placeholder="e.g., DMM Jan 30 — Callisto Cave (61–80) Plan" />
 
       <div style="height:10px"></div>
+
       <div class="help">
-        <b>Sharing</b><br/>
-        • <b>Export Pack (.zip)</b> = <code>plan.json</code> + <code>images/</code><br/>
-        • <b>Export Standalone HTML</b> = one file that self-imports plan+images when opened.<br/><br/>
-        <b>Reorder sections</b><br/>
-        • Drag the <code>⇅</code> handle on section headers.
+        <b>GitHub Pages Auto Pack</b><br/>
+        This page auto-imports <code>./data/dmm_plan.zip</code> once per browser per version.<br/>
+        When you upload a new zip, bump <code>AUTO_PACK_VERSION</code> in the script.
       </div>
 
       <div style="height:10px"></div>
@@ -384,13 +385,14 @@
 <!-- JSZip for pack import/export -->
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
-// ===== Auto-load pack config (GitHub Pages) =====
-const AUTO_PACK_URL = "./data/DMM updated 1-4-2026.zip"; // relative to index.html
-const AUTO_PACK_VERSION = "v1"; // bump this when you replace the zip
-
-
 <script>
 (() => {
+  // ===== Auto-load pack config (GitHub Pages) =====
+  // Put your zip here in the repo: /data/dmm_plan.zip
+  const AUTO_PACK_URL = "./data/dmm_plan.zip";
+  // BUMP THIS STRING every time you upload a new zip, so viewers re-import it.
+  const AUTO_PACK_VERSION = "2026-01-04";
+
   // ===== Config =====
   const PLAN_STORAGE_KEY = "dmm_plan_text_v3";
   const IMG_DB_NAME = "dmm_plan_images_v3";
@@ -680,31 +682,6 @@ const AUTO_PACK_VERSION = "v1"; // bump this when you replace the zip
     return norm;
   }
 
-  async function fetchZipAsFile(url) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to fetch zip: " + res.status);
-  const blob = await res.blob();
-  return new File([blob], "auto_pack.zip", { type: "application/zip" });
-}
-
-async function autoLoadPackIfNeeded() {
-  if (!AUTO_PACK_URL) return;
-
-  const key = "dmm_auto_pack_loaded_" + AUTO_PACK_VERSION;
-  if (localStorage.getItem(key) === "1") return;
-
-  try {
-    console.log("Auto-loading pack:", AUTO_PACK_URL);
-    const file = await fetchZipAsFile(AUTO_PACK_URL);
-    await importPackZip(file);
-    localStorage.setItem(key, "1");
-    console.log("Auto-pack loaded successfully");
-  } catch (e) {
-    console.warn("Auto-pack load failed:", e);
-  }
-}
-
-
   // ===== Paste support for images =====
   let lastImgTarget = null; // { stepObj, imgEl, hintEl }
   document.addEventListener("paste", async (ev) => {
@@ -958,12 +935,14 @@ async function autoLoadPackIfNeeded() {
       // inject payload into current HTML by replacing the embedded script
       let html = document.documentElement.outerHTML;
       const re = new RegExp(`<script\\s+id="${EMBED_SCRIPT_ID}"\\s+type="application\\/json">[\\s\\S]*?<\\/script>`, "i");
-const embeddedTag =
-  `<script id="${EMBED_SCRIPT_ID}" type="application/json">` +
-  `${escapeHtml(JSON.stringify(payload))}` +
-  `</scr` + `ipt>`;
-html = re.test(html) ? html.replace(re, embeddedTag) : html.replace(/<\/body>/i, embeddedTag + "\n</body>");
 
+      // IMPORTANT: do NOT include literal </script> in a JS template string in THIS page.
+      const embeddedTag =
+        `<script id="${EMBED_SCRIPT_ID}" type="application/json">` +
+        `${escapeHtml(JSON.stringify(payload))}` +
+        `</scr` + `ipt>`;
+
+      html = re.test(html) ? html.replace(re, embeddedTag) : html.replace(/<\/body>/i, embeddedTag + "\n</body>");
 
       downloadBlob(new Blob([html], { type:"text/html" }), `${safeFileName(state.title)}_standalone.html`);
       alert(`Standalone HTML exported with ${count} image(s).`);
@@ -973,6 +952,30 @@ html = re.test(html) ? html.replace(re, embeddedTag) : html.replace(/<\/body>/i,
     } finally {
       exportStandaloneBtn.disabled = false;
       exportStandaloneBtn.textContent = "🧩 Export Standalone HTML";
+    }
+  }
+
+  // ===== AUTO-LOAD ZIP FROM GITHUB PAGES =====
+  async function fetchZipAsFile(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("Failed to fetch zip: " + res.status);
+    const blob = await res.blob();
+    return new File([blob], "auto_pack.zip", { type: "application/zip" });
+  }
+
+  async function autoLoadPackIfNeeded() {
+    if (!AUTO_PACK_URL) return;
+
+    const key = "dmm_auto_pack_loaded_" + AUTO_PACK_VERSION;
+    if (localStorage.getItem(key) === "1") return;
+
+    try {
+      const file = await fetchZipAsFile(AUTO_PACK_URL);
+      await importPackZip(file);
+      localStorage.setItem(key, "1");
+      console.log("Auto-pack loaded:", AUTO_PACK_URL);
+    } catch (e) {
+      console.warn("Auto-pack load failed:", e);
     }
   }
 
@@ -1305,17 +1308,17 @@ html = re.test(html) ? html.replace(re, embeddedTag) : html.replace(/<\/body>/i,
   // ===== Startup =====
   (async () => {
     await importEmbeddedIfPresent();
+    await autoLoadPackIfNeeded(); // <-- auto-load hosted zip (GitHub Pages)
+
     if (!state.selectedSectionId && state.sections[0]) state.selectedSectionId = state.sections[0].id;
     setSaveStatus("Saved", true);
     saveNow();
-    await autoLoadPackIfNeeded();
-
     render();
     refreshStorageEstimate();
   })();
 
 })(); // end IIFE
 </script>
+
 </body>
 </html>
-
