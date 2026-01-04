@@ -384,6 +384,11 @@
 <!-- JSZip for pack import/export -->
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
+// ===== Auto-load pack config (GitHub Pages) =====
+const AUTO_PACK_URL = "./data/DMM updated 1-4-2026.zip"; // relative to index.html
+const AUTO_PACK_VERSION = "v1"; // bump this when you replace the zip
+
+
 <script>
 (() => {
   // ===== Config =====
@@ -674,6 +679,31 @@
     if (!norm.selectedSectionId && norm.sections[0]) norm.selectedSectionId = norm.sections[0].id;
     return norm;
   }
+
+  async function fetchZipAsFile(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to fetch zip: " + res.status);
+  const blob = await res.blob();
+  return new File([blob], "auto_pack.zip", { type: "application/zip" });
+}
+
+async function autoLoadPackIfNeeded() {
+  if (!AUTO_PACK_URL) return;
+
+  const key = "dmm_auto_pack_loaded_" + AUTO_PACK_VERSION;
+  if (localStorage.getItem(key) === "1") return;
+
+  try {
+    console.log("Auto-loading pack:", AUTO_PACK_URL);
+    const file = await fetchZipAsFile(AUTO_PACK_URL);
+    await importPackZip(file);
+    localStorage.setItem(key, "1");
+    console.log("Auto-pack loaded successfully");
+  } catch (e) {
+    console.warn("Auto-pack load failed:", e);
+  }
+}
+
 
   // ===== Paste support for images =====
   let lastImgTarget = null; // { stepObj, imgEl, hintEl }
@@ -1278,6 +1308,8 @@ html = re.test(html) ? html.replace(re, embeddedTag) : html.replace(/<\/body>/i,
     if (!state.selectedSectionId && state.sections[0]) state.selectedSectionId = state.sections[0].id;
     setSaveStatus("Saved", true);
     saveNow();
+    await autoLoadPackIfNeeded();
+
     render();
     refreshStorageEstimate();
   })();
@@ -1286,3 +1318,4 @@ html = re.test(html) ? html.replace(re, embeddedTag) : html.replace(/<\/body>/i,
 </script>
 </body>
 </html>
+
